@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Environmental Monitoring Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #141414;
+      margin: 0;
+      padding: 20px;
+      color: #ffffff;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .ai-section {
+      max-width: 1000px;
+      margin: 0 auto 20px auto;
+      background: #222;
+      border-left: 6px solid #ffc107;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      font-size: 15px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      color: #ffeb3b;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    .card {
+      background: #2e2e2e;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      text-align: center;
+    }
+
+    .circle-container {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      margin: 0 auto;
+    }
+
+    svg {
+      transform: rotate(-90deg);
+    }
+
+    .circle-bg {
+      fill: none;
+      stroke: #555;
+      stroke-width: 10;
+    }
+
+    .circle-progress {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke 0.3s, stroke-dashoffset 0.5s;
+    }
+
+    .circle-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .label {
+  font-size: 16px;
+  color: #ccc;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+    #lastUpdated {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 12px;
+      color: #888;
+    }
+
+      .seismic-chart {
+    max-width: 1000px;
+    margin: 20px auto;
+    background: #2e2e2e;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    color: #fff;
+  }
+
+  #quakeChart {
+    width: 100%;
+    height: 300px;
+  }
+
+.weather-forecast {
+  max-width: 1000px;
+  margin: 20px auto 0 auto;
+  background: #2e2e2e;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+
+#forecastContainer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 15px;
+}
+
+
+
+#seismicHistory > div:not(:last-child) {
+  border-bottom: 1px solid #444;
+  padding-bottom: 10px;
+}
+
+#quake-forecast {
+  background: #2e2e2e;
+  color: #fff;
+}
+
+
+
+
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 14px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+
+  <audio id="sound-temperature" src="alert/temperature.mp3"></audio>
+<audio id="sound-humidity" src="alert/humidity.mp3"></audio>
+<audio id="sound-air" src="alert/air.mp3"></audio>
+<audio id="sound-flood" src="alert/flood.mp3"></audio>
+<audio id="sound-quake" src="alert/quake.mp3"></audio>
+
+  <h1>🌍 Environmental AI Dashboard</h1>
+
+  <div class="weather-forecast card">
+    <h2>🌤 3-Day Weather Forecast (South-Caloocan)</h2>
+    <div id="forecastContainer">Loading forecast...</div>
+  </div>
+
+
+  <div class="ai-section" id="aiInsights">
+    🧠 AI Insights loading...
+  </div>
+
+  <div class="dashboard">
+    <div class="card">
+      <div class="circle-container">
+        <svg width="120" height="120">
+          <circle class="circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="circle-progress" id="progress-temperature" cx="60" cy="60" r="50"></circle>
+        </svg>
+        <div class="circle-text" id="text-temperature">--</div>
+      </div>
+      <div class="label">🌡️Temperature</div>
+    </div>
+
+    <div class="card">
+      <div class="circle-container">
+        <svg width="120" height="120">
+          <circle class="circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="circle-progress" id="progress-humidity" cx="60" cy="60" r="50"></circle>
+        </svg>
+        <div class="circle-text" id="text-humidity">--</div>
+      </div>
+      <div class="label">💧Humidity</div>
+    </div>
+
+    <div class="card">
+      <div class="circle-container">
+        <svg width="120" height="120">
+          <circle class="circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="circle-progress" id="progress-airQuality" cx="60" cy="60" r="50"></circle>
+        </svg>
+        <div class="circle-text" id="text-airQuality">--</div>
+      </div>
+      <div class="label">🌫️Air Quality</div>
+    </div>
+
+    <div class="card">
+      <div class="circle-container">
+        <svg width="120" height="120">
+          <circle class="circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="circle-progress" id="progress-floodLevel" cx="60" cy="60" r="50"></circle>
+        </svg>
+        <div class="circle-text" id="text-floodLevel">--</div>
+      </div>
+      <div class="label">🌊Flood Level</div>
+    </div>
+
+    <div class="card">
+      <div class="circle-container">
+        <svg width="120" height="120">
+          <circle class="circle-bg" cx="60" cy="60" r="50"></circle>
+          <circle class="circle-progress" id="progress-magnitude" cx="60" cy="60" r="50"></circle>
+        </svg>
+        <div class="circle-text" id="text-magnitude">--</div>
+      </div>
+      <div class="label">Quake Magnitude</div>
+    </div>
+  </div>
+
+
+<div class="weather-forecast card" style="margin-top: 20px;">
+  <h2>🌍 Philippines</h2>
+  <div id="quakeMap" style="height: 400px;"></div>
+</div>
+
+
+<div class="weather-forecast card" style="margin-top: 20px;">
+  <h2>📍 Recent Earthquakes Near the Philippines (Past 24 Hours)</h2>
+  <div id="earthquake-list">Loading nearby seismic data...</div>
+  <canvas id="earthquakeChart" style="margin-top: 20px;" height="200"></canvas>
+</div>
+
+
+
+
+<!-- Seismic History Section -->
+<div class="weather-forecast card" style="margin-top: 20px;">
+  <h2>🌍 Global Seismic Activity (Past 24 Hours)</h2>
+  <div id="seismicHistory">Loading seismic data...</div>
+</div>
+
+  <div id="lastUpdated">Last updated: --</div>
+
+  <footer>📡 Live from Firebase | Developed with ❤️</footer>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Environmental Monitoring Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #141414;
+      margin: 0;
+      padding: 20px;
+      color: #ffffff;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .ai-section {
+      max-width: 1000px;
+      margin: 0 auto 20px auto;
+      background: #222;
+      border-left: 6px solid #ffc107;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      font-size: 15px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      color: #ffeb3b;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    .card {
+      background: #2e2e2e;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      text-align: center;
+    }
+
+    .circle-container {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      margin: 0 auto;
+    }
+
+    svg {
+      transform: rotate(-90deg);
+    }
+
+    .circle-bg {
+      fill: none;
+      stroke: #555;
+      stroke-width: 10;
+    }
+
+    .circle-progress {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke 0.3s, stroke-dashoffset 0.5s;
+    }
+
+    .circle-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .label {
+  font-size: 16px;
+  color: #ccc;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+    #lastUpdated {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 12px;
+      color: #888;
+    }
+
+      .seismic-chart {
+    max-width: 1000px;
+    margin: 20px auto;
+    background: #2e2e2e;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    color: #fff;
+  }
+
+  #quakeChart {
+    width: 100%;
+    height: 300px;
+  }
+
+.weather-forecast {
+  max-width: 1000px;
+  margin: 20px auto 0 auto;
+  background: #2e2e2e;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+
+#forecastContainer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 15px;
+}
+
+
+
+#seismicHistory > div:not(:last-child) {
+  border-bottom: 1px solid #444;
+  padding-bottom: 10px;
+}
+
+#quake-forecast {
+  background: #2e2e2e;
+  color: #fff;
+}
+
+
+
+
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 14px;
+      color: #999;
+    }
+  </style>
+</head>
+
+
+  <script type="module">
+
+     emailjs.init("ATycG6FpC2gmfwTlc"); // Replace with your EmailJS Public Key
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAhJqVn_0kxZZIX0XuSHYMU_FK437YzNS8",
+      authDomain: "environmental-ai-dashboard.firebaseapp.com",
+      databaseURL: "https://environmental-ai-dashboard-default-rtdb.firebaseio.com",
+      projectId: "environmental-ai-dashboard",
+      storageBucket: "environmental-ai-dashboard.appspot.com",
+      messagingSenderId: "312965426738",
+      appId: "1:312965426738:web:bc2a074ca4175b39b4962b",
+      measurementId: "G-PGN100TYZ7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const data = {
+      temperature: null,
+      humidity: null,
+      air_quality: null,
+      flood_level: null,
+      magnitude: null
+    };
+
+    const circleRadius = 50;
+    const circleCircumference = 2 * Math.PI * circleRadius;
+
+    const sensorColors = {
+      temperature: '#4caf50',
+      humidity: '#4caf50',
+      airQuality: '#4caf50',
+      floodLevel: '#4caf50',
+      magnitude: '#4caf50'
+    };
+
+let userInteracted = false;
+const blynkToken = 'YOUR_TOKEN_HERE';
+const baseUrl = `https://blynk.cloud/external/api/get?token=${blynkToken}`;
+
+const soundCooldowns = {};
+const SOUND_COOLDOWN = 5 * 60 * 1000;
+
+
+['click', 'keydown', 'touchstart'].forEach(eventType => {
+  document.addEventListener(eventType, () => {
+    userInteracted = true;
+    console.log("User interacted, audio playback allowed now.");
+  }, { once: true });
+});
+
+function playAlertSound(id) {
+  const audio = document.getElementById(`sound-${id}`);
+  if (!audio) {
+    console.warn(`Audio element with id sound-${id} not found.`);
+    return;
+  }
+  if (userInteracted) {
+    if (audio.paused) {
+      audio.currentTime = 0;
+      audio.play().catch(err => console.warn("Audio play failed:", err));
+    } else {
+      // Already playing, do nothing or optionally queue
+      console.log("Audio is already playing.");
+    }
+  } else {
+    console.warn("Audio play blocked because user hasn't interacted yet.");
+  }
+}
+
+
+    function setProgress(id, value, max, unit = '', alert = false) {
+      const progressCircle = document.getElementById('progress-' + id);
+      const text = document.getElementById('text-' + id);
+
+      const percent = Math.min(value / max, 1);
+      const offset = circleCircumference * (1 - percent);
+
+      progressCircle.setAttribute('stroke-dasharray', circleCircumference);
+      progressCircle.setAttribute('stroke-dashoffset', offset);
+      progressCircle.setAttribute('stroke', alert ? '#f44336' : (sensorColors[id] || '#4caf50'));
+
+      text.textContent = value + unit;
+    }
+
+function updateAIInsights() {
+  let insights = [];
+  let alerts = [];
+
+  if (data.temperature > 35) {
+    alerts.push("Temperature");
+    insights.push("🔥 <strong>High temperature detected</strong> — possible heatstroke risk.");
+    playAlertSound("temperature");
+  } else if (data.temperature < 10) {
+    insights.push("❄️ <strong>Low temperature warning</strong> — dress warmly.");
+  }
+
+  if (data.humidity > 90) {
+    alerts.push("Humidity");
+    insights.push("💧 <strong>Humidity is high</strong> — risk of mold and discomfort.");
+    playAlertSound("humidity");
+  }
+
+  if (data.air_quality > 200) {
+    alerts.push("Air Quality");
+    insights.push("🌫 <strong>Poor air quality</strong> — limit outdoor activity.");
+    playAlertSound("air");
+  } else if (data.air_quality <= 50) {
+    insights.push("✅ Air quality is good.");
+  }
+
+  if (data.flood_level > 0) {
+    alerts.push("Flood Level");
+    insights.push("🌊 <strong>Flood alert</strong> — rising water detected.");
+    playAlertSound("flood");
+  }
+
+  if (data.magnitude >= 4.5) {
+    alerts.push("Quake");
+    insights.push("🌍 <strong>Earthquake detected</strong> — check for structural damage.");
+    playAlertSound("quake");
+  }
+
+  const alertsText = alerts.length
+    ? `<p style="color:#f44336;">⚠ Alerts: ${alerts.join(", ")}</p>`
+    : `<p style="color:#4caf50;">✅ No active alerts.</p>`;
+
+  document.getElementById("aiInsights").innerHTML =
+    alertsText + `<p>${insights.join(" ")}</p>`;
+
+  const now = Date.now();
+  const cooldownPeriod = 5 * 60 * 1000; // 5 minutes
+
+  if (alerts.length > 0 && (now - lastEmailSentTime >= cooldownPeriod)) {
+    sendEmailAlert(alerts, insights);
+    lastEmailSentTime = now;
+  }
+}
+
+    function bindFirebaseValue(path, key, id, max, unit = '', alertCheck = () => false) {
+      const dbRef = ref(db, path);
+      onValue(dbRef, (snapshot) => {
+        const value = snapshot.val();
+        if (value !== null) {
+          data[key] = value;
+          const alert = alertCheck(value);
+          setProgress(id, value, max, unit, alert);
+          updateAIInsights();
+          document.getElementById("lastUpdated").textContent = "Last updated: " + new Date().toLocaleString();
+        }
+      });
+    }
+
+    bindFirebaseValue('sensors/temperature', 'temperature', 'temperature', 50, '°C', v => v > 35 || v < 10);
+    bindFirebaseValue('sensors/humidity', 'humidity', 'humidity', 100, '%', v => v > 90);
+    bindFirebaseValue('sensors/air_quality', 'air_quality', 'airQuality', 300, ' AQI', v => v > 150);
+    bindFirebaseValue('sensors/flood_level', 'flood_level', 'floodLevel', 100, 'cm', v => v > 10);
+    bindFirebaseValue('sensors/magnitude', 'magnitude', 'magnitude', 10, ' M', v => v >= 4.5);
+
+
+let lastEmailSentTime = 0; // Store last sent timestamp globally
+
+function sendEmailAlert(alerts, insights) {
+  const now = Date.now();
+  const fiveMinutes = 5 * 60 * 1000; 
+
+  if (now - lastEmailSentTime < fiveMinutes) {
+    console.log("⏳ Email not sent: waiting 5 minutes between emails.");
+    return; 
+  }
+
+  emailjs.send("service_0e4wavt","template_wy1p9xm", {
+  // to_email: "rrdevera22@gmail.com", // recipient email
+    alerts: alerts.join(", "),
+    insights: insights.join(" "),
+  })
+  .then(() => {
+    console.log("✅ Email sent successfully");
+    lastEmailSentTime = Date.now(); // Update last sent time on success
+  })
+  .catch((error) => {
+    console.error("❌ Failed to send email:", error);
+  });
+}
+
+
+    // Load weather forecast from Open-Meteo
+    function loadForecast() {
+      const forecastContainer = document.getElementById('forecastContainer');
+      forecastContainer.textContent = 'Loading forecast...';
+
+      const lat = 14.6581;
+      const lon = 120.9840;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto`;
+
+      fetch(url)
+        .then(res => {
+          if (!res.ok) throw new Error('Network response was not OK');
+          return res.json();
+        })
+        .then(data => {
+          const days = data.daily.time;
+          const maxTemps = data.daily.temperature_2m_max;
+          const minTemps = data.daily.temperature_2m_min;
+          const weatherCodes = data.daily.weathercode;
+
+          const weatherCodeMap = {
+            0: '☀️ Clear sky',
+            1: '🌤 Mainly clear',
+            2: '⛅ Partly cloudy',
+            3: '☁️ Overcast',
+            45: '🌫 Fog',
+            48: '🌫 Depositing rime fog',
+            51: '🌦 Light drizzle',
+            53: '🌧 Moderate drizzle',
+            55: '🌧 Dense drizzle',
+            56: '🌧 Freezing drizzle',
+            57: '🌧 Freezing drizzle',
+            61: '🌧 Slight rain',
+            63: '🌧 Moderate rain',
+            65: '🌧 Heavy rain',
+            66: '🌧 Freezing rain',
+            67: '🌧 Freezing rain',
+            71: '❄️ Slight snow fall',
+            73: '❄️ Moderate snow fall',
+            75: '❄️ Heavy snow fall',
+            77: '❄️ Snow grains',
+            80: '🌧 Slight rain showers',
+            81: '🌧 Moderate rain showers',
+            82: '🌧 Violent rain showers',
+            85: '❄️ Slight snow showers',
+            86: '❄️ Heavy snow showers',
+            95: '⛈ Thunderstorm',
+            96: '⛈ Thunderstorm with slight hail',
+            99: '⛈ Thunderstorm with heavy hail'
+          };
+
+          // Clear container
+          forecastContainer.innerHTML = '';
+
+          for (let i = 0; i < 3; i++) {
+            const date = new Date(days[i]);
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            const weatherDesc = weatherCodeMap[weatherCodes[i]] || 'Unknown';
+
+            const dayDiv = document.createElement('div');
+            dayDiv.innerHTML = `
+              <div><strong>${date.toLocaleDateString(undefined, options)}</strong></div>
+              <div>${weatherDesc}</div>
+              <div>Max: ${maxTemps[i]}°C</div>
+              <div>Min: ${minTemps[i]}°C</div>
+            `;
+            forecastContainer.appendChild(dayDiv);
+          }
+        })
+        .catch(err => {
+          forecastContainer.textContent = 'Failed to load forecast.';
+          console.error('Failed to fetch weather forecast:', error);
+        });
+    }
+
+    // Load forecast once and then refresh every 10 minutes
+    loadForecast();
+   
+
+function loadSeismicHistory() {
+  const container = document.getElementById("seismicHistory");
+  container.textContent = "Loading seismic data...";
+
+  const now = new Date();
+  const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${past24h}&orderby=time`;
+
+  fetch(url)
+    .then(response => {
+      if (!response.ok) throw new Error("Failed to fetch earthquake data.");
+      return response.json();
+    })
+    .then(data => {
+      const earthquakes = data.features;
+      container.innerHTML = '';
+
+      earthquakes.slice(0, 10).forEach(eq => {
+        const props = eq.properties;
+        const time = new Date(props.time).toLocaleString();
+        const magnitude = props.mag;
+        const place = props.place;
+
+        const entry = document.createElement("div");
+        entry.innerHTML = `<strong>🌐 ${place}</strong><br>Magnitude: ${magnitude}<br><small>${time}</small>`;
+        container.appendChild(entry);
+      });
+
+      if (earthquakes.length === 0) {
+        container.textContent = "No seismic activity reported in the past 24 hours.";
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      container.textContent = "Failed to load seismic data.";
+    });
+}
+
+// Load global seismic history on startup
+loadSeismicHistory();
+
+
+
+
+
+
+const quakeMap = L.map('quakeMap').setView([12.8797, 121.7740], 5); // Center of PH
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(quakeMap);
+
+function loadPhilippineEarthquakes() {
+  fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_month.geojson')
+    .then(res => res.json())
+    .then(data => {
+      // Filter earthquakes inside the Philippine bounding box
+      const phEarthquakes = data.features.filter(eq => {
+        const [lng, lat] = eq.geometry.coordinates;
+        return lat >= 4 && lat <= 21 && lng >= 115 && lng <= 130;
+      });
+
+      // Clear previous markers
+      if (window.phquakeMarkers) {
+        window.phquakeMarkers.forEach(marker => quakeMap.removeLayer(marker));
+      }
+      window.phquakeMarkers = [];
+
+      const eqList = document.getElementById('earthquake-list');
+      eqList.innerHTML = '';
+
+      const labels = [];
+      const magnitudes = [];
+
+      phEarthquakes.slice(0, 30).forEach(eq => {
+        const props = eq.properties;
+        const [lng, lat, depth] = eq.geometry.coordinates;
+        const mag = props.mag;
+        const place = props.place;
+        const time = new Date(props.time).toLocaleString();
+
+        const marker = L.circleMarker([lat, lng], {
+          radius: mag * 2.5,
+          fillColor: mag >= 5 ? '#f44336' : '#2196f3',
+          color: '#fff',
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(quakeMap);
+
+        marker.bindPopup(`<strong>${place}</strong><br>Magnitude: ${mag}<br>Depth: ${depth} km<br>Time: ${time}`);
+        window.phquakeMarkers.push(marker);
+
+        const item = document.createElement('div');
+        item.innerHTML = `<strong>${place}</strong><br>Magnitude: ${mag}<br><small>${time}</small>`;
+        eqList.appendChild(item);
+
+        labels.push(place.length > 20 ? place.substring(0, 20) + '...' : place);
+        magnitudes.push(mag);
+      });
+
+      if (window.earthquakeChartInstance) {
+        window.earthquakeChartInstance.data.labels = labels;
+        window.earthquakeChartInstance.data.datasets[0].data = magnitudes;
+        window.earthquakeChartInstance.update();
+      } else {
+        const ctx = document.getElementById('earthquakeChart').getContext('2d');
+        window.earthquakeChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Magnitude',
+              data: magnitudes,
+              backgroundColor: magnitudes.map(mag => mag >= 5 ? '#f44336' : '#2196f3')
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 10
+              }
+            },
+            plugins: {
+              legend: {
+                display: false
+              },
+              tooltip: {
+                callbacks: {
+                  label: ctx => `Magnitude: ${ctx.parsed.y}`
+                }
+              }
+            }
+          }
+        });
+      }
+
+      if (phEarthquakes.length === 0) {
+        eqList.textContent = 'No earthquakes detected near the Philippines in the past month.';
+      }
+    })
+    .catch(err => {
+      console.error('Failed to load Philippine earthquakes:', err);
+      document.getElementById('earthquake-list').textContent = 'Failed to load data.';
+    });
+}
+
+
+// Populate recent earthquakes list and show magnitudes on a chart
+function updateEarthquakeListAndChart(earthquakes) {
+  const listContainer = document.getElementById('earthquake-list');
+  listContainer.innerHTML = '';
+
+  if (earthquakes.length === 0) {
+    listContainer.textContent = 'No recent earthquakes near the Philippines.';
+    return;
+  }
+
+  // Sort by time descending (most recent first)
+  earthquakes.sort((a, b) => b.properties.time - a.properties.time);
+
+  // Limit to 10 most recent
+  const recentQuakes = earthquakes.slice(0, 10);
+
+  const magnitudes = [];
+  const labels = [];
+
+  recentQuakes.forEach(eq => {
+    const mag = eq.properties.mag;
+    const place = eq.properties.place;
+    const time = new Date(eq.properties.time).toLocaleString();
+
+    // List item
+    const item = document.createElement('div');
+    item.innerHTML = `<strong>🌍 ${place}</strong> — Mag: ${mag.toFixed(1)} — ${time}`;
+    listContainer.appendChild(item);
+
+    magnitudes.push(mag);
+    labels.push(place.length > 20 ? place.substring(0, 20) + '...' : place);
+  });
+
+  // Draw magnitudes chart with Chart.js
+  const ctx = document.getElementById('earthquakeChart').getContext('2d');
+  
+  // Destroy previous chart instance if any (to avoid duplicates)
+  if (window.earthquakeChartInstance) {
+    window.earthquakeChartInstance.destroy();
+  }
+
+  window.earthquakeChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Magnitude',
+        data: magnitudes,
+        backgroundColor: 'rgba(240, 52, 52, 0.7)',
+        borderColor: 'rgba(240, 52, 52, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: 10
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+}
+
+// Initial load and refresh every 10 minutes
+loadPhilippineEarthquakes();
+setInterval(loadPhilippineEarthquakes, 600000);
+
+
+ const phSeismicHistoryEl = document.getElementById("phSeismicHistory");
+const phSeismicChartCtx = document.getElementById("phSeismicChart").getContext("2d");
+let phSeismicChart;
+
+
+
+
+function loadPhilippineSeismicHistory() {
+  const container = document.getElementById('phSeismicHistory');
+  const ctx = document.getElementById('phSeismicChart').getContext('2d');
+
+  const now = new Date();
+  const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const nowISO = now.toISOString();
+
+  const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${past24h}&endtime=${nowISO}&minmagnitude=2.5&maxlatitude=21&minlatitude=4.5&maxlongitude=127&minlongitude=116`;
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      if (!data.features.length) {
+        container.innerHTML = "<p>No recent earthquakes near the Philippines.</p>";
+        return;
+      }
+
+      container.innerHTML = '';
+      // Sort by time descending
+      const sorted = data.features.sort((a,b) => b.properties.time - a.properties.time);
+      sorted.slice(0, 10).forEach(eq => {
+        const p = document.createElement('p');
+        p.innerHTML = `M ${eq.properties.mag.toFixed(1)} - ${eq.properties.place} <br> <small>${new Date(eq.properties.time).toLocaleString()}</small>`;
+        container.appendChild(p);
+      });
+
+      // Prepare data for chart
+      const labels = sorted.map(eq => new Date(eq.properties.time).toLocaleTimeString());
+      const mags = sorted.map(eq => eq.properties.mag);
+
+      // Destroy existing chart if any
+      if (window.phSeismicChartInstance) {
+        window.phSeismicChartInstance.destroy();
+      }
+
+      window.phSeismicChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels.reverse(),
+          datasets: [{
+            label: 'Magnitude',
+            data: mags.reverse(),
+            borderColor: '#f44336',
+            backgroundColor: 'rgba(244, 67, 54, 0.3)',
+            fill: true,
+            tension: 0.3,
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              min: 0,
+              max: 10
+            }
+          }
+        }
+      });
+    })
+    .catch(err => {
+      container.innerHTML = 'Failed to load nearby seismic data.';
+      console.error(err);
+    });
+}
+
+loadPhilippineSeismicHistory();
+setInterval(loadPhilippineSeismicHistory, 10 * 60 * 1000);
+
+
+
+  </script>
+</body>
+</html>
+
+</body>
+</html>
