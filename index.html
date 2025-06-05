@@ -484,23 +484,32 @@ const SOUND_COOLDOWN = 5 * 60 * 1000;
 });
 
 function playAlertSound(id) {
-  const audio = document.getElementById(`sound-${id}`);
-  if (!audio) {
-    console.warn(`Audio element with id sound-${id} not found.`);
+  const now = Date.now();
+
+  if (soundCooldowns[id] && now - soundCooldowns[id] < SOUND_COOLDOWN) {
+    console.log(`⏳ ${id} sound is on cooldown.`);
     return;
   }
+
+  const audio = document.getElementById(`sound-${id}`);
+  if (!audio) {
+    console.warn(`⚠️ Audio element with id sound-${id} not found.`);
+    return;
+  }
+
   if (userInteracted) {
-    if (audio.paused) {
-      audio.currentTime = 0;
-      audio.play().catch(err => console.warn("Audio play failed:", err));
-    } else {
-      // Already playing, do nothing or optionally queue
-      console.log("Audio is already playing.");
-    }
+    audio.currentTime = 0;
+    audio.play().then(() => {
+      soundCooldowns[id] = Date.now(); // Set cooldown
+      console.log(`🔊 Playing ${id} sound.`);
+    }).catch(err => {
+      console.warn(`⚠️ Failed to play audio for ${id}:`, err);
+    });
   } else {
-    console.warn("Audio play blocked because user hasn't interacted yet.");
+    console.warn("⛔ Audio blocked: waiting for user interaction.");
   }
 }
+
 
 
     function setProgress(id, value, max, unit = '', alert = false) {
@@ -535,7 +544,7 @@ function updateAIInsights() {
     playAlertSound("humidity");
   }
 
-  if (data.air_quality > 200) {
+  if (data.air_quality > 400) {
     alerts.push("Air Quality");
     insights.push("🌫 <strong>Poor air quality</strong> — limit outdoor activity.");
     playAlertSound("air");
